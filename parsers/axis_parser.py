@@ -28,12 +28,19 @@ def parse_axis_statement(text: str) -> Dict[str, Optional[str]]:
     
     # Extract Card Holder Name
     name_patterns = [
-        r"Card\s+(?:Holder|Member)[:\s]+([A-Z\s]+?)(?:\n|Card)",
-        r"Name[:\s]+([A-Z\s]+?)(?:\n|Card)",
-        r"Dear\s+([A-Z\s]+?)(?:,|\n)",
-        r"Mr\.?\s+([A-Z\s]+?)(?:\n|,)",
-        r"Ms\.?\s+([A-Z\s]+?)(?:\n|,)",
-        r"Customer\s+Name[:\s]+([A-Z\s]+?)(?:\n)"
+        r"Card\s+holder\s+Name\s*:\s*([A-Z][A-Za-z\s]+?)(?:\n|Name:|Address:|For|$)",
+        r"Card\s+(?:Holder|Member)[:\s]+([A-Z][A-Z\s]+?)(?:\n|Card|Number|\d)",
+        r"Card\s*Holder[:\s]+([A-Z][A-Z\s]+?)(?:\n|Card|Number|\d)",
+        r"Cardholder[:\s]+([A-Z][A-Z\s]+?)(?:\n|Card|Number|\d)",
+        r"Name\s+on\s+Card[:\s]+([A-Z][A-Z\s]+?)(?:\n|Card|Number|\d)",
+        r"Primary\s+Member[:\s]+([A-Z][A-Z\s]+?)(?:\n|Card|Number|\d)",
+        r"Customer\s+Name[:\s]+([A-Z][A-Z\s]+?)(?:\n|Card|Number|\d)",
+        r"Account\s+Holder[:\s]+([A-Z][A-Z\s]+?)(?:\n|Card|Number|\d)",
+        r"Name[:\s]+([A-Z][A-Z\s]+?)(?:\n|Card)",
+        r"Dear\s+([A-Z][A-Z\s]+?)(?:,|\n)",
+        r"Mr\.?\s+([A-Z][A-Z\s]+?)(?:\n|,)",
+        r"Ms\.?\s+([A-Z][A-Z\s]+?)(?:\n|,)",
+        r"Mrs\.?\s+([A-Z][A-Z\s]+?)(?:\n|,)"
     ]
     
     for pattern in name_patterns:
@@ -44,25 +51,39 @@ def parse_axis_statement(text: str) -> Dict[str, Optional[str]]:
     
     # Extract Last 4 Digits of Card Number
     card_patterns = [
-        r"Card\s+(?:Number|No\.?)[:\s]+(?:X+\s*)*(\d{4})",
+        r"(\d{4})\s+(\d{4})\s+(\d{4})\s+(\d{4})",  # Full card number
+        r"Card\s+(?:Number|ending|No\.?|number)[:\s]+(?:X+\s*)*(\d{4})",
+        r"Card\s+No\.?\s*[:\s]*[X\*]+(\d{4})",
         r"(?:X{4}\s+){3}(\d{4})",
-        r"ending\s+(?:with\s+)?(\d{4})",
+        r"(?:\*{4}\s+){3}(\d{4})",
+        r"ending\s+(?:with\s+|in\s+)?(\d{4})",
+        r"Card\s+ending\s+(?:with|in)?[:\s]+(\d{4})",
+        r"(?:XXXX|xxxx|\*{4})\s*(?:XXXX|xxxx|\*{4})\s*(?:XXXX|xxxx|\*{4})\s*(\d{4})",
         r"[X\*]{12}(\d{4})",
-        r"Card\s+ending[:\s]+(\d{4})"
+        r"Card:\s*[X\*]+(\d{4})",
+        r"(?:Card|CARD)\s+[X\*]{4,}\s*(\d{4})"
     ]
     
     for pattern in card_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            data["last_4_digits"] = match.group(1)
+            # If pattern has 4 groups (full card number), take the last group
+            if len(match.groups()) == 4:
+                data["last_4_digits"] = match.group(4)
+            else:
+                data["last_4_digits"] = match.group(1)
             break
     
     # Extract Billing Cycle / Statement Period
     cycle_patterns = [
-        r"Statement\s+Period[:\s]+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4}\s*[-–to]+\s*\d{1,2}\s+[A-Za-z]{3}\s+\d{4})",
-        r"Billing\s+(?:Cycle|Period)[:\s]+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4}\s*[-–to]+\s*\d{1,2}\s+[A-Za-z]{3}\s+\d{4})",
-        r"(\d{1,2}\s+[A-Za-z]{3}\s+\d{4}\s*[-–]+\s*\d{1,2}\s+[A-Za-z]{3}\s+\d{4})",
-        r"From[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{4})\s+To[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{4})"
+        r"Opening/Closing\s+Date\s+(\d{1,2}/\d{1,2}/[A-Z]{2})\s*[-–]\s*(\d{1,2}/\d{1,2}/[A-Z]{2})",
+        r"Statement\s+Period[:\s]+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\s*[-–to\s]+\s*\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})",
+        r"Billing\s+(?:Cycle|Period)[:\s]+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\s*[-–to\s]+\s*\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})",
+        r"Statement\s+Date[:\s]+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\s*[-–to\s]+\s*\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})",
+        r"Period[:\s]+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\s*[-–to\s]+\s*\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})",
+        r"(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\s*[-–]+\s*\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})",
+        r"From[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{4})\s+To[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{4})",
+        r"(\d{1,2}[/-]\d{1,2}[/-]\d{4})\s+(?:to|-)\s+(\d{1,2}[/-]\d{1,2}[/-]\d{4})"
     ]
     
     for pattern in cycle_patterns:
@@ -76,10 +97,15 @@ def parse_axis_statement(text: str) -> Dict[str, Optional[str]]:
     
     # Extract Payment Due Date
     due_date_patterns = [
-        r"Payment\s+Due\s+Date[:\s]+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})",
-        r"Due\s+Date[:\s]+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})",
-        r"Pay\s+by[:\s]+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})",
-        r"Payment\s+Due[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{4})"
+        r"Payment\s+due\s+date\s*:\s*(\d{1,2}/\d{1,2}/\d{4})",
+        r"Payment\s+Due\s+Date[:\s]+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})",
+        r"Due\s+Date[:\s]+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})",
+        r"Pay\s+by[:\s]+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})",
+        r"Payment\s+Due[:\s]+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})",
+        r"Due\s+on[:\s]+(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})",
+        r"Payment\s+Due\s+Date[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{4})",
+        r"Due\s+Date[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{4})",
+        r"Pay\s+by[:\s]+(\d{1,2}[/-]\d{1,2}[/-]\d{4})"
     ]
     
     for pattern in due_date_patterns:
@@ -90,11 +116,17 @@ def parse_axis_statement(text: str) -> Dict[str, Optional[str]]:
     
     # Extract Total Amount Due
     amount_patterns = [
-        r"Total\s+Amount\s+Due[:\s]+(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)",
-        r"Total\s+Due[:\s]+(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)",
-        r"Amount\s+Due[:\s]+(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)",
-        r"Outstanding\s+Amount[:\s]+(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)",
-        r"(?:Rs\.?|INR|₹)\s*([\d,]+\.?\d*)\s+Total"
+        r"New\s+Balance\s+(?:\$|Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)",
+        r"Total\s+balance\s*:\s*(?:\$|Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)",
+        r"Total\s+Amount\s+Due[:\s]+(?:\$|Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)",
+        r"Total\s+Due[:\s]+(?:\$|Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)",
+        r"Amount\s+Due[:\s]+(?:\$|Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)",
+        r"Total\s+Outstanding[:\s]+(?:\$|Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)",
+        r"Outstanding\s+Amount[:\s]+(?:\$|Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)",
+        r"Amount\s+Payable[:\s]+(?:\$|Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)",
+        r"Payable[:\s]+(?:\$|Rs\.?|INR|₹)?\s*([\d,]+\.?\d*)",
+        r"(?:\$|Rs\.?|INR|₹)\s*([\d,]+\.?\d*)\s+Total\s+(?:Amount\s+)?Due",
+        r"(?:\$|Rs\.?|INR|₹)\s*([\d,]+\.?\d*)\s+(?:is\s+)?(?:the\s+)?Total"
     ]
     
     for pattern in amount_patterns:
